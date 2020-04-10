@@ -1,0 +1,9 @@
+data/datasets/*
+!data/datasets/PLACEHOLDER
+!data/datasets/CAVE/PLACEHOLDER
+!data/datasets/CAVE/balloons_ms/*
+
+.DS_Store
+.idea/
+*/__pycache__
+*/*/__pycache__
