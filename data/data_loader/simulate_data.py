@@ -1,20 +1,32 @@
 import os
-from scipy import misc
 import random
 import scipy.io
 import numpy as np
 
+from scipy import misc
+from skimage import color
 
-def load_data(folder_path):
+
+def load_data(folder_path, method='rgb'):
     file_names = os.listdir(folder_path)
     for file_name in file_names:
         if '.bmp' in file_name:
             rgb_img = misc.imread(os.path.join(folder_path, file_name), flatten=0)
+            if method == 'lab':
+                low_channel_img = color.rgb2lab(rgb_img)
+            elif method == 'xyz':
+                low_channel_img = color.rgb2xyz(rgb_img)
+            else:
+                low_channel_img = rgb_img
+
         if '.mat' in file_name:
             data = scipy.io.loadmat(os.path.join(folder_path, file_name))
             if 'reflectances' in data:
                 hs_img = data['reflectances']
-    return rgb_img, hs_img
+                hs_img = hs_img[:, :, :31]
+                hs_img = hs_img / np.max(hs_img)
+
+    return low_channel_img, hs_img
 
 
 def random_patches(rgb_img, hs_img, patches_num, patches_size):
@@ -27,8 +39,8 @@ def random_patches(rgb_img, hs_img, patches_num, patches_size):
         patch_y = random.randint(0, w)
         if patch_x + patches_size < h and patch_y + patches_size < w:
             patches.append((patch_x, patch_y))
-            rgb_patches.append(rgb_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size])
-            hs_patches.append(hs_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size])
+            rgb_patches.append(np.array(rgb_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size]))
+            hs_patches.append(np.array(hs_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size]))
 
     return np.array(rgb_patches), np.array(hs_patches), np.array(patches)
 
