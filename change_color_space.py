@@ -1,4 +1,8 @@
+import os
 import numpy as np
+import scipy.io
+
+from config import DATASETS_DIR
 
 
 def sp2xyz(s, lightsource, xbar, ybar, zbar, normalize=False):
@@ -18,18 +22,19 @@ def sp2xyz(s, lightsource, xbar, ybar, zbar, normalize=False):
     return XYZ
 
 
-def xyz2lab(XYZ, refWhite):
+def xyz2lab(XYZ, refWhite=None):
     # XYZ may be a n x 3 matrix containg in each row one XYZ value.
     # In that case n x 3 matrix will be returned containing
     # one Lab value for each XYZ value
-    X = XYZ[:, 0]
-    Y = XYZ[:, 1]
-    Z = XYZ[:, 2]
+    xxn = XYZ[:, 0]
+    yyn = XYZ[:, 1]
+    zzn = XYZ[:, 2]
 
     # element wise division
-    xxn = np.divide(X, refWhite[:, 0])
-    yyn = np.divide(Y, refWhite[:, 1])
-    zzn = np.divide(Z, refWhite[:, 2])
+    if refWhite:
+        xxn = np.divide(xxn, refWhite[:, 0])
+        yyn = np.divide(yyn, refWhite[:, 1])
+        zzn = np.divide(zzn, refWhite[:, 2])
 
     # See Lab_2_XYZ.m for explanation
     i1 = np.where(xxn > 0.008856)
@@ -87,6 +92,29 @@ def xyz2lab(XYZ, refWhite):
     return Lab
 
 
+def hs_to_xyz(reflectances):
+    reflectances = reflectances / np.max(reflectances)
+
+    illum = scipy.io.loadmat(os.path.join(DATASETS_DIR, 'D65.mat'))['D65']
+
+    radiances = np.zeros((reflectances.shape))  # initialize array
+    for i in range(illum.shape[0]):
+        radiances[:, :, i] = reflectances[:, :, i] * illum[i]
+
+    radiances = radiances
+    r, c, w = radiances.shape
+    radiances = np.reshape(radiances, (r * c, w))
+
+    xyzbar = scipy.io.loadmat(os.path.join(DATASETS_DIR, 'xyzbar.mat'))['xyzbar']
+    XYZ = np.dot(xyzbar.transpose(), radiances.transpose()).transpose()
+
+    XYZ = np.reshape(XYZ, (r, c, 3))
+    XYZ[XYZ < 0] = 0
+    XYZ = XYZ / np.max(XYZ)
+
+    return XYZ
+
+
 def XYZ2sRGB_exgamma(XYZ):
     # See IEC_61966-2-1.pdf
     # No gamma correction has been incorporated here, nor any clipping, so this
@@ -110,5 +138,22 @@ def XYZ2sRGB_exgamma(XYZ):
 
     # Reshape to recover shape of original input.
     sRGB = np.reshape(sRGB, d)
+    # return sRGB
 
-    return sRGB
+    sRGB[sRGB < 0] = 0
+    sRGB[sRGB > 1] = 1
+
+    z = np.max(sRGB)
+    sRGB[sRGB > z] = z
+    RGB_clip = sRGB / z
+    RGB_clip = np.power(RGB_clip, 0.4)
+
+    return RGB_clip
+
+
+def hs_to_rgb(reflectances):
+    XYZ = hs_to_xyz(reflectances)
+
+    RGB_clip = XYZ2sRGB_exgamma(XYZ)
+
+    return RGB_clip

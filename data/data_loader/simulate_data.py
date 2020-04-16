@@ -2,9 +2,25 @@ import os
 import random
 import scipy.io
 import numpy as np
-
-from scipy import misc
+import cv2
+import matplotlib.pyplot as plt
 from skimage import color
+
+from change_color_space import hs_to_rgb, XYZ2sRGB_exgamma
+
+
+def create_rgb_from_hs(hs_file_path):
+    rgb_file_path = '%s_D65.jpg' % hs_file_path.split('.')[0]
+    if not os.path.exists(rgb_file_path):
+        reflectances = scipy.io.loadmat(hs_file_path)['reflectances']
+        reflectances = reflectances[:, :, :31]
+
+        RGB_clip = hs_to_rgb(reflectances)
+
+        plt.imsave(rgb_file_path, RGB_clip)
+
+    rgb_image = cv2.imread(rgb_file_path)
+    return rgb_image
 
 
 def load_data(folder_path, method='rgb'):
@@ -12,8 +28,10 @@ def load_data(folder_path, method='rgb'):
 
     file_names = os.listdir(folder_path)
     for file_name in file_names:
-        if '.bmp' in file_name:
-            rgb_img = misc.imread(os.path.join(folder_path, file_name), flatten=0)
+        if '.mat' in file_name:
+            hs_file_path = os.path.join(folder_path, file_name)
+
+            rgb_img = create_rgb_from_hs(hs_file_path)
             if method == 'lab':
                 low_channel_img = color.rgb2lab(rgb_img)
             elif method == 'xyz':
@@ -21,8 +39,7 @@ def load_data(folder_path, method='rgb'):
             else:
                 low_channel_img = rgb_img
 
-        if '.mat' in file_name:
-            data = scipy.io.loadmat(os.path.join(folder_path, file_name))
+            data = scipy.io.loadmat(hs_file_path)
             if 'reflectances' in data:
                 hs_img = data['reflectances']
                 hs_img = hs_img[:, :, :31]
@@ -52,6 +69,6 @@ def simulate_spectrophotometer(img_patches):
     for i in range(img_patches.shape[0]):
         average_patch = []
         for d in range(img_patches.shape[-1]):
-            average_patch.append(np.sum(img_patches[i, :, :, d]))
+            average_patch.append(np.mean(img_patches[i, :, :, d]))
         average_patches.append(average_patch)
     return np.array(average_patches)

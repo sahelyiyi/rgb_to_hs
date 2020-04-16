@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 from sklearn.metrics import mean_squared_error
 from math import sqrt
@@ -10,25 +11,37 @@ from config import DATASETS_DIR, PATCHES_NUM, PATCHES_SIZE, TRAIN_RATIO
 from constants import D65, X_BAR, Y_BAR, Z_BAR
 from data.data_loader.simulate_data import load_data, random_patches, simulate_spectrophotometer
 from models.regression import Regression
-from change_color_space import sp2xyz, xyz2lab
+from change_color_space import sp2xyz, xyz2lab, hs_to_xyz, hs_to_rgb
 
 
 def get_rmse(y, predictions):
     return sqrt(mean_squared_error(y, predictions))
 
 
-def get_delta_e_2000(y, predictions, normalize=False):
-    xbar = np.array(X_BAR[2:33])
-    ybar = np.array(Y_BAR[2:33])
-    zbar = np.array(Z_BAR[2:33])
-    lightsource = np.array(D65[2:33])
+def get_delta_e_2000(y, predictions):
+    # xbar = np.array(X_BAR[2:33])
+    # ybar = np.array(Y_BAR[2:33])
+    # zbar = np.array(Z_BAR[2:33])
+    # lightsource = np.array(D65[2:33])
+    #
+    # ref_white_refl = np.ones((1, 31))
+    # ref_white_xyz = sp2xyz(ref_white_refl, lightsource, xbar, ybar, zbar)
+    #
+    # y_xyz = sp2xyz(y, lightsource, xbar, ybar, zbar, normalize)
+    # pred_xyz = sp2xyz(predictions, lightsource, xbar, ybar, zbar, normalize)
 
-    ref_white_refl = np.ones((1, 31))
-    ref_white_xyz = sp2xyz(ref_white_refl, lightsource, xbar, ybar, zbar)
+    if len(y.shape) == 2:
+        y = y.reshape((1, y.shape[0], y.shape[1]))
+        predictions = predictions.reshape((1, predictions.shape[0], predictions.shape[1]))
 
-    y_xyz = sp2xyz(y, lightsource, xbar, ybar, zbar, normalize)
-    pred_xyz = sp2xyz(predictions, lightsource, xbar, ybar, zbar, normalize)
+    y_xyz = hs_to_xyz(y)
+    pred_xyz = hs_to_xyz(predictions)
 
+    if len(y_xyz.shape) == 3:
+        y_xyz = y_xyz.reshape((y_xyz.shape[1], y_xyz.shape[2]))
+        pred_xyz = pred_xyz.reshape((pred_xyz.shape[1], pred_xyz.shape[2]))
+
+    ref_white_xyz = None
     y_lab = xyz2lab(y_xyz, ref_white_xyz)
     pred_lab = xyz2lab(pred_xyz, ref_white_xyz)
 
@@ -42,24 +55,49 @@ def get_delta_e_2000(y, predictions, normalize=False):
     return np.mean(delta_e_2000s)
 
 
-def run(patches_num=PATCHES_NUM,  method='rgb', normalize=False, patches_size=PATCHES_SIZE,
+def get_rgbs(hs_samples):
+    rgbs = []
+    for i in range(hs_samples.shape[0]):
+        vec = hs_samples[i]
+        sub_img = np.empty((20, 20, vec.shape[0]))
+        sub_img[:, :] = vec
+
+        rgbs.append(hs_to_rgb(sub_img))
+    return rgbs
+
+
+def visualize_results(y, predictions):
+    y_rgbs = get_rgbs(y)
+    y_rgbs = np.concatenate(y_rgbs, axis=1)
+    pred_rgbs = get_rgbs(predictions)
+    pred_rgbs = np.concatenate(pred_rgbs, axis=1)
+    black_pad = np.ones((5, y_rgbs.shape[1], 3))
+    return np.concatenate((y_rgbs, black_pad, pred_rgbs), axis=0)
+
+
+def run(patches_num=PATCHES_NUM,  method='rgb', patches_size=PATCHES_SIZE, visualize=False,
         folder_path=os.path.join(DATASETS_DIR, 'CAVE', 'balloons_ms')):
 
-    rgb_img, hs_img = load_data(folder_path, method)
-    rgb_patches, hs_patches, patches = random_patches(rgb_img, hs_img, patches_num, patches_size)
+    ls_img, hs_img = load_data(folder_path, method)
+    ls_patches, hs_patches, patches = random_patches(ls_img, hs_img, patches_num, patches_size)
 
-    avg_rgb_patches = simulate_spectrophotometer(rgb_patches)
+    avg_ls_patches = simulate_spectrophotometer(ls_patches)
     avg_hs_patches = simulate_spectrophotometer(hs_patches)
 
     train_samples = int(TRAIN_RATIO * patches_num)
-    train_rgb, test_rgb = avg_rgb_patches[:train_samples], avg_rgb_patches[train_samples:]
+    train_ls, test_ls = avg_ls_patches[:train_samples], avg_ls_patches[train_samples:]
     train_hs, test_hs = avg_hs_patches[:train_samples], avg_hs_patches[train_samples:]
 
-    regresstion = Regression(train_rgb, train_hs)
+    regresstion = Regression(train_ls, train_hs)
     regresstion.train()
-    predictions = regresstion.model.predict(test_rgb)
+    predictions = regresstion.model.predict(test_ls)
     rmse = get_rmse(test_hs, predictions)
-    delta_e = get_delta_e_2000(test_hs, predictions, normalize)
+    delta_e = get_delta_e_2000(test_hs, predictions)
+
+    if visualize:
+        result = visualize_results(test_hs, predictions)
+        plt.imshow(result)
+
     return rmse, delta_e
 
 
