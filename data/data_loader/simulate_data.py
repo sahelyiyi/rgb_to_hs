@@ -8,6 +8,8 @@ from skimage import color
 
 
 def load_data(folder_path, method='rgb'):
+    low_channel_img, hs_img = None, None
+
     file_names = os.listdir(folder_path)
     for file_name in file_names:
         if '.bmp' in file_name:

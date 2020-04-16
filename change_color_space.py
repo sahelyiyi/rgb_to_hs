@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def sp2xyz(s, lightsource, xbar, ybar, zbar):
+def sp2xyz(s, lightsource, xbar, ybar, zbar, normalize=False):
     #  The input spectrum s can be a vector or a n x 36 spectra matrix.
     #  With sa n x 36 input matrix, a n x 3 output matrix is produced with one XYZ
     k = 100 / (np.transpose(lightsource*ybar))
@@ -10,6 +10,11 @@ def sp2xyz(s, lightsource, xbar, ybar, zbar):
     # Producing final XYZ value by dot products between _bar predefined
     # values & previosly computed Vs
     XYZ = np.dot(k*Vs, np.column_stack((xbar, ybar, zbar)))
+
+    if normalize:
+        XYZ[XYZ < 0] = 0
+        XYZ = XYZ / np.max(XYZ)
+
     return XYZ
 
 

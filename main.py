@@ -10,14 +10,14 @@ from config import DATASETS_DIR, PATCHES_NUM, PATCHES_SIZE, TRAIN_RATIO
 from constants import D65, X_BAR, Y_BAR, Z_BAR
 from data.data_loader.simulate_data import load_data, random_patches, simulate_spectrophotometer
 from models.regression import Regression
-from utils import sp2xyz, xyz2lab
+from change_color_space import sp2xyz, xyz2lab
 
 
 def get_rmse(y, predictions):
     return sqrt(mean_squared_error(y, predictions))
 
 
-def get_delta_e_2000(y, predictions):
+def get_delta_e_2000(y, predictions, normalize=False):
     xbar = np.array(X_BAR[2:33])
     ybar = np.array(Y_BAR[2:33])
     zbar = np.array(Z_BAR[2:33])
@@ -26,8 +26,8 @@ def get_delta_e_2000(y, predictions):
     ref_white_refl = np.ones((1, 31))
     ref_white_xyz = sp2xyz(ref_white_refl, lightsource, xbar, ybar, zbar)
 
-    y_xyz = sp2xyz(y, lightsource, xbar, ybar, zbar)
-    pred_xyz = sp2xyz(predictions, lightsource, xbar, ybar, zbar)
+    y_xyz = sp2xyz(y, lightsource, xbar, ybar, zbar, normalize)
+    pred_xyz = sp2xyz(predictions, lightsource, xbar, ybar, zbar, normalize)
 
     y_lab = xyz2lab(y_xyz, ref_white_xyz)
     pred_lab = xyz2lab(pred_xyz, ref_white_xyz)
@@ -42,11 +42,11 @@ def get_delta_e_2000(y, predictions):
     return np.mean(delta_e_2000s)
 
 
-def run(patches_num=PATCHES_NUM, method='rgb'):
-    folder_path = os.path.join(DATASETS_DIR, 'CAVE', 'balloons_ms')
+def run(patches_num=PATCHES_NUM,  method='rgb', normalize=False, patches_size=PATCHES_SIZE,
+        folder_path=os.path.join(DATASETS_DIR, 'CAVE', 'balloons_ms')):
 
     rgb_img, hs_img = load_data(folder_path, method)
-    rgb_patches, hs_patches, patches = random_patches(rgb_img, hs_img, patches_num, PATCHES_SIZE)
+    rgb_patches, hs_patches, patches = random_patches(rgb_img, hs_img, patches_num, patches_size)
 
     avg_rgb_patches = simulate_spectrophotometer(rgb_patches)
     avg_hs_patches = simulate_spectrophotometer(hs_patches)
@@ -59,7 +59,7 @@ def run(patches_num=PATCHES_NUM, method='rgb'):
     regresstion.train()
     predictions = regresstion.model.predict(test_rgb)
     rmse = get_rmse(test_hs, predictions)
-    delta_e = get_delta_e_2000(test_hs, predictions)
+    delta_e = get_delta_e_2000(test_hs, predictions, normalize)
     return rmse, delta_e
 
 

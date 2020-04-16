@@ -1,7 +1,7 @@
 import scipy.io
 import numpy as np
 
-from utils import XYZ2sRGB_exgamma
+from change_color_space import XYZ2sRGB_exgamma
 
 reflectances = scipy.io.loadmat('data/datasets/scene4_sample/ref4_scene4.mat')['reflectances']
 reflectances = reflectances/np.max(reflectances)
@@ -10,7 +10,7 @@ illum_6500 = scipy.io.loadmat('data/datasets/scene4_sample/illum_6500.mat')['ill
 
 radiances_6500 = np.zeros((reflectances.shape))  # initialize array
 for i in range(33):
-  radiances_6500[:,:,i] = reflectances[:,:,i] * illum_6500[i]
+  radiances_6500[:, :, i] = reflectances[:, :, i] * illum_6500[i]
 
 radiances = radiances_6500
 r, c, w = radiances.shape
