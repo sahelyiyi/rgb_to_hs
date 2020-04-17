@@ -55,47 +55,91 @@ def get_delta_e_2000(y, predictions):
     return np.mean(delta_e_2000s)
 
 
-def get_rgbs(hs_samples):
-    rgbs = []
-    for i in range(hs_samples.shape[0]):
-        vec = hs_samples[i]
-        sub_img = np.empty((20, 20, vec.shape[0]))
-        sub_img[:, :] = vec
+def get_blocks(samples, block_size):
+    blocks = []
+    for i in range(samples.shape[0]):
+        vec = samples[i]
+        sub_block = np.empty((block_size, block_size, vec.shape[0]))
+        sub_block[:, :] = vec
 
-        rgbs.append(hs_to_rgb(sub_img))
+        blocks.append(sub_block)
+
+    return blocks
+
+
+def get_rgbs(hs_samples, block_size):
+    blocks = get_blocks(hs_samples, block_size)
+    rgbs = []
+    for block in blocks:
+        rgbs.append(hs_to_rgb(block))
+
     return rgbs
 
 
-def visualize_results(y, predictions):
-    y_rgbs = get_rgbs(y)
-    y_rgbs = np.concatenate(y_rgbs, axis=1)
-    pred_rgbs = get_rgbs(predictions)
-    pred_rgbs = np.concatenate(pred_rgbs, axis=1)
-    black_pad = np.ones((5, y_rgbs.shape[1], 3))
-    return np.concatenate((y_rgbs, black_pad, pred_rgbs), axis=0)
+def get_concat_rgbs(hs_samples, block_size, convert=True):
+    if convert:
+        rgbs = get_rgbs(hs_samples, block_size)
+    else:
+        rgbs = get_blocks(hs_samples, block_size)
+
+    rgbs = np.concatenate(rgbs, axis=1)
+    return rgbs
 
 
-def run(patches_num=PATCHES_NUM,  method='rgb', patches_size=PATCHES_SIZE, visualize=False,
+def visualize_results(y, predictions, block_size=20):
+    y_rgbs = get_concat_rgbs(y, block_size)
+    pred_rgbs = get_concat_rgbs(predictions, block_size)
+    white_pad = np.ones((5, y_rgbs.shape[1], 3))
+    result = np.concatenate((y_rgbs, white_pad, pred_rgbs), axis=0)
+    return result
+
+
+def visualize_selected_patches(rgb_img, patches, patches_size, color):
+    for patch_x, patch_y in patches:
+        rgb_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size] = color
+    return rgb_img
+
+
+def run(patches_num=PATCHES_NUM,  method='rgb', patches_size=PATCHES_SIZE, visualize=False, block_size=PATCHES_SIZE,
         folder_path=os.path.join(DATASETS_DIR, 'CAVE', 'balloons_ms')):
 
-    ls_img, hs_img = load_data(folder_path, method)
+    rgb_img, ls_img, hs_img = load_data(folder_path, method)
     ls_patches, hs_patches, patches = random_patches(ls_img, hs_img, patches_num, patches_size)
 
     avg_ls_patches = simulate_spectrophotometer(ls_patches)
     avg_hs_patches = simulate_spectrophotometer(hs_patches)
 
     train_samples = int(TRAIN_RATIO * patches_num)
+    train_patches, test_patches = patches[:train_samples], patches[train_samples:]
     train_ls, test_ls = avg_ls_patches[:train_samples], avg_ls_patches[train_samples:]
     train_hs, test_hs = avg_hs_patches[:train_samples], avg_hs_patches[train_samples:]
+
+    if visualize:
+        selected_patches = visualize_selected_patches(rgb_img.copy(), train_patches, patches_size, color=0)
+        selected_patches = visualize_selected_patches(selected_patches, test_patches, patches_size, color=255)
+        plt.imshow(selected_patches)
+
+    # if visualize and method == 'rgb':
+    #     test_rgbs = []
+    #     avg_rgbs = get_blocks(test_ls, block_size=patches_size)
+    #     for patch_x, patch_y in test_patches:
+    #         test_rgbs.append(rgb_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size])
+    #
+    #     test_rgbs = np.concatenate(test_rgbs, axis=1)
+    #     avg_rgbs = np.concatenate(avg_rgbs, axis=1)
+    #     white_pad = np.zeros((5, test_rgbs.shape[1], 3))
+    #     plt.imshow(np.concatenate((test_rgbs, white_pad, avg_rgbs), axis=0))
+
 
     regresstion = Regression(train_ls, train_hs)
     regresstion.train()
     predictions = regresstion.model.predict(test_ls)
+    # predictions[predictions < 0] = 0  # TODO check this
     rmse = get_rmse(test_hs, predictions)
     delta_e = get_delta_e_2000(test_hs, predictions)
 
     if visualize:
-        result = visualize_results(test_hs, predictions)
+        result = visualize_results(test_hs, predictions, block_size=block_size)
         plt.imshow(result)
 
     return rmse, delta_e

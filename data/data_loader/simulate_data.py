@@ -6,7 +6,7 @@ import cv2
 import matplotlib.pyplot as plt
 from skimage import color
 
-from change_color_space import hs_to_rgb, XYZ2sRGB_exgamma
+from change_color_space import hs_to_rgb
 
 
 def create_rgb_from_hs(hs_file_path):
@@ -24,7 +24,7 @@ def create_rgb_from_hs(hs_file_path):
 
 
 def load_data(folder_path, method='rgb'):
-    low_channel_img, hs_img = None, None
+    rgb_img, low_channel_img, hs_img = None, None, None
 
     file_names = os.listdir(folder_path)
     for file_name in file_names:
@@ -45,23 +45,23 @@ def load_data(folder_path, method='rgb'):
                 hs_img = hs_img[:, :, :31]
                 hs_img = hs_img / np.max(hs_img)
 
-    return low_channel_img, hs_img
+    return rgb_img, low_channel_img, hs_img
 
 
-def random_patches(rgb_img, hs_img, patches_num, patches_size):
-    h, w = rgb_img.shape[0], rgb_img.shape[1]
+def random_patches(ls_img, hs_img, patches_num, patches_size):
+    h, w = ls_img.shape[0], ls_img.shape[1]
     patches = []
-    rgb_patches = []
+    ls_patches = []
     hs_patches = []
     while len(patches) < patches_num:
         patch_x = random.randint(0, h)
         patch_y = random.randint(0, w)
         if patch_x + patches_size < h and patch_y + patches_size < w:
             patches.append((patch_x, patch_y))
-            rgb_patches.append(np.array(rgb_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size]))
+            ls_patches.append(np.array(ls_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size]))
             hs_patches.append(np.array(hs_img[patch_y: patch_y + patches_size, patch_x: patch_x + patches_size]))
 
-    return np.array(rgb_patches), np.array(hs_patches), np.array(patches)
+    return np.array(ls_patches), np.array(hs_patches), np.array(patches)
 
 
 def simulate_spectrophotometer(img_patches):
